@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Posts on Luca Molteni</title>
+    <link>https://molteniluca.github.io/posts/</link>
+    <description>Recent content in Posts on Luca Molteni</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en</language>
+    <lastBuildDate>Sat, 10 Oct 2020 00:00:00 +0000</lastBuildDate><atom:link href="https://molteniluca.github.io/posts/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>home_r00ter</title>
+      <link>https://molteniluca.github.io/posts/homerooter/</link>
+      <pubDate>Sat, 10 Oct 2020 00:00:00 +0000</pubDate>
+      
+      <guid>https://molteniluca.github.io/posts/homerooter/</guid>
+      <description>Cyberchallenge.IT finals A/D
+(This writeup was written by me and Kien Tuong Truong, check out also his page!)
+Introduction Six guys, one router
+On the 1st of October the CyberChallenge.IT project held an Attack/Defense CTF, in which one team for each of the 28 participating Italian universities was competing to be crowned as the CyberChallenge.IT champion and to have a chance to be selected for Team Italy during ECSC 2021.</description>
+    </item>
+    
+  </channel>
+</rss>
