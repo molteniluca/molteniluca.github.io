@@ -2,26 +2,26 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
   xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
-    <loc>https://molteniluca.gihtub.io/about/</loc>
+    <loc>https://molteniluca.github.io/about/</loc>
     <lastmod>2025-08-10T00:00:00+00:00</lastmod>
   </url><url>
-    <loc>https://molteniluca.gihtub.io/</loc>
+    <loc>https://molteniluca.github.io/</loc>
     <lastmod>2025-08-10T00:00:00+00:00</lastmod>
   </url><url>
-    <loc>https://molteniluca.gihtub.io/posts/</loc>
+    <loc>https://molteniluca.github.io/posts/</loc>
     <lastmod>2025-07-27T00:00:00+00:00</lastmod>
   </url><url>
-    <loc>https://molteniluca.gihtub.io/posts/sqlite_weirdness/</loc>
+    <loc>https://molteniluca.github.io/posts/sqlite_weirdness/</loc>
     <lastmod>2025-07-27T00:00:00+00:00</lastmod>
   </url><url>
-    <loc>https://molteniluca.gihtub.io/posts/tenet_writeup/</loc>
+    <loc>https://molteniluca.github.io/posts/tenet_writeup/</loc>
     <lastmod>2021-01-23T00:00:00+00:00</lastmod>
   </url><url>
-    <loc>https://molteniluca.gihtub.io/posts/homerooter/</loc>
+    <loc>https://molteniluca.github.io/posts/homerooter/</loc>
     <lastmod>2020-10-10T00:00:00+00:00</lastmod>
   </url><url>
-    <loc>https://molteniluca.gihtub.io/categories/</loc>
+    <loc>https://molteniluca.github.io/categories/</loc>
   </url><url>
-    <loc>https://molteniluca.gihtub.io/tags/</loc>
+    <loc>https://molteniluca.github.io/tags/</loc>
   </url>
 </urlset>
