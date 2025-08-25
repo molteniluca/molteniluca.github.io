@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html><head lang="en">
+	<meta charset="utf-8" />
+	<meta http-equiv="X-UA-Compatible" content="IE=edge"><title>Hitcon 2020 - Tenet Writeup - Luca Molteni&#39;s Blog</title><meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="description" content="2020 is the year that I started playing ctf, this is one of the first challenge that I solved with my teammates in an hard CTF.
+I had fun developing the idea for the exploit for this challenge, here is the writeup:" />
+	<meta property="og:image" content=""/>
+	<meta property="og:url" content="https://molteniluca.gihtub.io/posts/tenet_writeup/">
+  <meta property="og:site_name" content="Luca Molteni&#39;s Blog">
+  <meta property="og:title" content="Hitcon 2020 - Tenet Writeup">
+  <meta property="og:description" content="2020 is the year that I started playing ctf, this is one of the first challenge that I solved with my teammates in an hard CTF. I had fun developing the idea for the exploit for this challenge, here is the writeup:">
+  <meta property="og:locale" content="en_us">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="posts">
+    <meta property="article:published_time" content="2021-01-23T00:00:00+00:00">
+    <meta property="article:modified_time" content="2021-01-23T00:00:00+00:00">
+
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Hitcon 2020 - Tenet Writeup">
+  <meta name="twitter:description" content="2020 is the year that I started playing ctf, this is one of the first challenge that I solved with my teammates in an hard CTF. I had fun developing the idea for the exploit for this challenge, here is the writeup:">
+
+        <link href="https://molteniluca.gihtub.io/css/fonts.2c2227b81b1970a03e760aa2e6121cd01f87c88586803cbb282aa224720a765f.css" rel="stylesheet">
+	
+
+	
+	<link rel="stylesheet" type="text/css" media="screen" href="https://molteniluca.gihtub.io/css/main.6a0f23ea50fd34b46fee262a5a68e17d458c51a2bc99ba1ba018065de6b180c3.css" />
+</head>
+<body>
+        <div class="content"><header>
+	<div class="main">
+		<a href="https://molteniluca.gihtub.io/">Luca Molteni&#39;s Blog</a>
+	</div>
+	<nav>
+		
+		<a href="/">Home</a>
+		
+		<a href="/posts">All posts</a>
+		
+		
+	</nav>
+</header>
+
+<main>
+  <article>
+    <div class="post-container">
+      
+      <div class="post-content">
+        <div class="title">
+          <h1 class="title">Hitcon 2020 - Tenet Writeup</h1>
+          <div class="meta">Posted on Jan 23, 2021</div>
+        </div>
+        
+        <section class="body">
+          <p>2020 is the year that I started playing ctf, this is one of the first challenge that I solved with my teammates in an hard CTF.
+I had fun developing the idea for the exploit for this challenge, here is the writeup:</p>
+<p>Challenge description:</p>
+<pre tabindex="0"><code>    You have to start looking at the world in a new way.
+
+    nc 52.192.42.215 9427
+
+    Author: david942j
+</code></pre><h1 id="the-goal-of-the-challenge">The Goal of the Challenge</h1>
+<p>The challenge is based on the <code>server.rb</code> ruby script which takes a shellcode as input and wraps it into an ELF executable file that is then run by the <code>time_machine</code> debugger. The goal of the challenge was to initially reverse this debugger and learn what it exactly does. Later on we found out that in order to retrieve the flag the shellcode needed to be executable in two ways: the normal and the reversed one. The peculiarity was that the code would run reversed following the same flow it got in the ‘straight’ way.</p>
+<h1 id="the-generated-elf">The generated ELF</h1>
+<p>First of all we wanted to test out what kind of wrapping was in place within our shellcode, we found out that seccomp was enabled preventing us from executing every possible syscall but read, write, exit, and sigreturn, as mentioned in the man:</p>
+<pre tabindex="0"><code>    The only system calls that the calling thread is permitted to make are read(2), write(2), _exit(2) (but not exit_group(2)), and sigreturn(2)
+</code></pre><p>We also found that it initialized a both readable and writable mapping at address <code>0x2170000</code> to <code>0x2171000</code>. Our shellcode started from address <code>0xdead0080</code> and needed to be less than 2KB.</p>
+<h1 id="the-time_machine-debugger">The time_machine debugger</h1>
+<p>We started reversing this binary, we soon realized that it was a debugger executing whatever it’s passed through as a first argument (Our generated ELF). Our shellcode was executed step by step saving in a list every executed instruction address. Once it got to a SYSCALL instruction it checked whether the EAX register was set to 0x3C (sys_exit) and, if so, it started executing every instruction stored in the list in reversed order. The syscall (or sysenter) instructions were completely ignored and even if we got one we couldn’t execute almost anything because of the seccomp. The debugger, once started, also sets an 8byte cookie to <code>0x2170000</code>, checks if it’s cleared once our shellcode is executed and rechecks if it’s there once it got executed the other way back.</p>
+<h1 id="the-shellcode">The shellcode</h1>
+<p>So the challenge was: write down an assembly that could erase the cookie when executed in the normal way and could restore it when executed with the same flow but reversed. Our first tought was to store it into a register and xor it to memory in a way that looked like this:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-asm" data-lang="asm"><span style="display:flex;"><span><span style="color:#a6e22e">mov</span> <span style="color:#66d9ef">rcx</span>, <span style="color:#ae81ff">0x2170000</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">mov</span> <span style="color:#66d9ef">rdx</span>, <span style="color:#ae81ff">0x0</span>     <span style="color:#75715e">; Clean rdx
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">xor</span> <span style="color:#66d9ef">rdx</span>, [<span style="color:#66d9ef">rcx</span>]   <span style="color:#75715e">; Set/erase rdx
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">xor</span> [<span style="color:#66d9ef">rcx</span>], <span style="color:#66d9ef">rdx</span>   <span style="color:#75715e">; Erase/set memory
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">mov</span> <span style="color:#66d9ef">rcx</span>, <span style="color:#ae81ff">0x2170000</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">mov</span> <span style="color:#66d9ef">eax</span>, <span style="color:#ae81ff">0x3c</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">syscall</span>
+</span></span></code></pre></div><p>Of course, it wasn’t that simple, the registers (both the CPU and FP ones) got erased right before the reversed execution, we needed somewhere else to store the cookie. The stack? No, we couldn’t have a stack address in the reversed execution. The rest of the 0x2170000 mapping? No, this debugger checked also that the entire page was NULL(ed). But then we realized that we actually had a memory: the executed instruction order! So the final shellcode looked like this:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-asm" data-lang="asm"><span style="display:flex;"><span><span style="color:#a6e22e">mov</span> <span style="color:#66d9ef">rdx</span>, <span style="color:#ae81ff">0x2170000</span> <span style="color:#75715e">; initialize rdx to cookie address
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">mov</span> <span style="color:#66d9ef">rsp</span>, <span style="color:#ae81ff">0x2170500</span> <span style="color:#75715e">; improvised stack to store ret values
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">mov</span> <span style="color:#66d9ef">rcx</span>, <span style="color:#66d9ef">rdx</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">rcx</span>, <span style="color:#ae81ff">0</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">call</span> <span style="color:#66d9ef">confrontoLow</span> <span style="color:#75715e">; confronto == compare
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">rcx</span>, <span style="color:#ae81ff">0</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">mov</span> <span style="color:#66d9ef">rcx</span>, <span style="color:#66d9ef">rdx</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">rcx</span>, <span style="color:#ae81ff">0</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">call</span> <span style="color:#66d9ef">confrontoHigh</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">rcx</span>, <span style="color:#ae81ff">0</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">mov</span> <span style="color:#66d9ef">rcx</span>, <span style="color:#66d9ef">rdx</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">rcx</span>, <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">call</span> <span style="color:#66d9ef">confrontoLow</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">rcx</span>, <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">mov</span> <span style="color:#66d9ef">rcx</span>, <span style="color:#66d9ef">rdx</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">rcx</span>, <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">call</span> <span style="color:#66d9ef">confrontoHigh</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">rcx</span>, <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">mov</span> <span style="color:#66d9ef">rcx</span>, <span style="color:#66d9ef">rdx</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#960050;background-color:#1e0010">.</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#960050;background-color:#1e0010">.</span> <span style="color:#75715e">; Replicated code for every nibble possible value
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#960050;background-color:#1e0010">.</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">rcx</span>, <span style="color:#ae81ff">15</span> <span style="color:#75715e">; While coding at 4am, we didn&#39;t realized that up to 7 was enough, we copied more than needed(16 bytes)
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">call</span> <span style="color:#66d9ef">confrontoLow</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">rcx</span>, <span style="color:#ae81ff">15</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">mov</span> <span style="color:#66d9ef">rcx</span>, <span style="color:#66d9ef">rdx</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">rcx</span>, <span style="color:#ae81ff">15</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">call</span> <span style="color:#66d9ef">confrontoHigh</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">rcx</span>, <span style="color:#ae81ff">15</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">push</span> <span style="color:#ae81ff">0</span> <span style="color:#75715e">; clean improvised stack
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">; reset a bunch of things just to be sure
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">mov</span> <span style="color:#66d9ef">rsp</span>, <span style="color:#ae81ff">0x2170500</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">mov</span> <span style="color:#66d9ef">rdx</span>, <span style="color:#ae81ff">0x2170000</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">mov</span> <span style="color:#66d9ef">rcx</span>, <span style="color:#ae81ff">0x2170500</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">xor</span> <span style="color:#66d9ef">rdx</span>,<span style="color:#66d9ef">rdx</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">xor</span> <span style="color:#66d9ef">rbx</span>,<span style="color:#66d9ef">rbx</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">xor</span> <span style="color:#66d9ef">rcx</span>,<span style="color:#66d9ef">rcx</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">xor</span> <span style="color:#66d9ef">r14</span>,<span style="color:#66d9ef">r14</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">; Or should I comment here? Whatever...
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">mov</span> <span style="color:#66d9ef">rax</span>, <span style="color:#ae81ff">0x3c</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">syscall</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">; Check the upper nibble and jump to the calculated function offset
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>confrontoHigh:
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">xor</span> <span style="color:#66d9ef">rbx</span>,<span style="color:#66d9ef">rbx</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">mov</span> <span style="color:#66d9ef">bl</span>, <span style="color:#66d9ef">byte</span> <span style="color:#66d9ef">ptr</span>[<span style="color:#66d9ef">rcx</span>]
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">shr</span> <span style="color:#66d9ef">bl</span>, <span style="color:#ae81ff">4</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">mov</span> <span style="color:#66d9ef">r14</span>, <span style="color:#ae81ff">0xdead035b</span> <span style="color:#75715e">; absolute for nibble00High
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">r14</span>, <span style="color:#66d9ef">rbx</span>        <span style="color:#75715e">; multiply by 8 for lazy people
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">r14</span>, <span style="color:#66d9ef">rbx</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">r14</span>, <span style="color:#66d9ef">rbx</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">r14</span>, <span style="color:#66d9ef">rbx</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">r14</span>, <span style="color:#66d9ef">rbx</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">r14</span>, <span style="color:#66d9ef">rbx</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">r14</span>, <span style="color:#66d9ef">rbx</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">r14</span>, <span style="color:#66d9ef">rbx</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">jmp</span> <span style="color:#66d9ef">r14</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">; Check the lower nibble and jump to the calculated function offset
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>confrontoLow:
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">xor</span> <span style="color:#66d9ef">rbx</span>,<span style="color:#66d9ef">rbx</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">mov</span> <span style="color:#66d9ef">bl</span>, <span style="color:#66d9ef">byte</span> <span style="color:#66d9ef">ptr</span>[<span style="color:#66d9ef">rcx</span>]
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">and</span> <span style="color:#66d9ef">bl</span>, <span style="color:#ae81ff">0xf</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">mov</span> <span style="color:#66d9ef">r14</span>, <span style="color:#ae81ff">0xdead030b</span> <span style="color:#75715e">; absolute for nibble00Low
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">r14</span>, <span style="color:#66d9ef">rbx</span>        <span style="color:#75715e">; multiply by 5 for lazy people
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">r14</span>, <span style="color:#66d9ef">rbx</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">r14</span>, <span style="color:#66d9ef">rbx</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">r14</span>, <span style="color:#66d9ef">rbx</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">add</span> <span style="color:#66d9ef">r14</span>, <span style="color:#66d9ef">rbx</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">jmp</span> <span style="color:#66d9ef">r14</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>nibble00Low:
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">xor</span> <span style="color:#66d9ef">qword</span> <span style="color:#66d9ef">ptr</span> [<span style="color:#66d9ef">rcx</span>],<span style="color:#ae81ff">0x00</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">ret</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>nibble01:
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">xor</span> <span style="color:#66d9ef">qword</span> <span style="color:#66d9ef">ptr</span> [<span style="color:#66d9ef">rcx</span>],<span style="color:#ae81ff">0x01</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">ret</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#960050;background-color:#1e0010">.</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#960050;background-color:#1e0010">.</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#960050;background-color:#1e0010">.</span>
+</span></span><span style="display:flex;"><span>nibble0f:
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">xor</span> <span style="color:#66d9ef">qword</span> <span style="color:#66d9ef">ptr</span> [<span style="color:#66d9ef">rcx</span>],<span style="color:#ae81ff">0x0f</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">ret</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>nibble00High:
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">xor</span> <span style="color:#66d9ef">qword</span> <span style="color:#66d9ef">ptr</span> [<span style="color:#66d9ef">rcx</span>],<span style="color:#ae81ff">0x00</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">ret</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">nop</span>  <span style="color:#75715e">; Needed a 3 byte offset because xor with immediate ≤0x7f is smaller than the other half byte (Wtf x64 assembly?)
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">nop</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">nop</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>nibble10:
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">xor</span> <span style="color:#66d9ef">qword</span> <span style="color:#66d9ef">ptr</span> [<span style="color:#66d9ef">rcx</span>],<span style="color:#ae81ff">0x10</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">ret</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">nop</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">nop</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">nop</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#960050;background-color:#1e0010">.</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#960050;background-color:#1e0010">.</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#960050;background-color:#1e0010">.</span>
+</span></span><span style="display:flex;"><span>nibble70:
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">xor</span> <span style="color:#66d9ef">qword</span> <span style="color:#66d9ef">ptr</span> [<span style="color:#66d9ef">rcx</span>],<span style="color:#ae81ff">0x70</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">ret</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">nop</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">nop</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">nop</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>nibble80:
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">xor</span> <span style="color:#66d9ef">qword</span> <span style="color:#66d9ef">ptr</span> [<span style="color:#66d9ef">rcx</span>],<span style="color:#ae81ff">0x80</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">ret</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#960050;background-color:#1e0010">.</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#960050;background-color:#1e0010">.</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#960050;background-color:#1e0010">.</span>
+</span></span><span style="display:flex;"><span>nibblef0:
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">xor</span> <span style="color:#66d9ef">qword</span> <span style="color:#66d9ef">ptr</span> [<span style="color:#66d9ef">rcx</span>],<span style="color:#ae81ff">0xf0</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">ret</span>
+</span></span></code></pre></div><p>And the flow does the rest… When it goes back it initializes a register at the right byte address and the flow ‘remembers’ which value every nibble had by executing the code segment containing the xor with that value.</p>
+
+        </section>
+        <div class="post-tags">
+          
+          
+          
+        </div>
+      </div>
+
+      
+      
+    </div>
+
+    </article>
+</main>
+<footer>
+  <div style="display:flex"><a class="soc" href="https://github.com/molteniluca/" rel="me" title="GitHub"><svg class="feather">
+   <use href="/svg/feather-sprite.51cf5647cb1987f769b616558f2620fd9423d72058490231b391bf6aa3744b55.svg#github" />
+</svg></a><a class="border"></a><a class="soc" href="https://twitter.com/Luca__molteni/" rel="me" title="Twitter"><svg class="feather">
+   <use href="/svg/feather-sprite.51cf5647cb1987f769b616558f2620fd9423d72058490231b391bf6aa3744b55.svg#twitter" />
+</svg></a><a class="border"></a><a class="soc" href="https://www.linkedin.com/in/lmolteni/" rel="me" title="LinkedIn"><svg class="feather">
+   <use href="/svg/feather-sprite.51cf5647cb1987f769b616558f2620fd9423d72058490231b391bf6aa3744b55.svg#linkedin" />
+</svg></a><a class="border"></a></div>
+  <div class="footer-info">
+    2025  © Luca Molteni |  <a
+      href="https://github.com/athul/archie">Archie Theme</a> | Built with <a href="https://gohugo.io">Hugo</a>
+  </div>
+</footer>
+
+
+
+</div>
+    </body>
+</html>
