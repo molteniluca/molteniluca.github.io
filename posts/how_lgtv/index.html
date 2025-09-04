@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html><head lang="en">
+	<meta charset="utf-8" />
+	<meta http-equiv="X-UA-Compatible" content="IE=edge"><title>How to root your LG TV (If you live in Italy) - Luca Molteni&#39;s Blog</title><meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="description" content="This post should have been written at least three years ago, but here we are.
+At the end of 2021, while stuck at home with COVID and confined within my four walls, I was watching YouTube videos while my mom had the TV tuned to the italic Canale 5." />
+	<meta property="og:image" content=""/>
+	<meta property="og:url" content="https://molteniluca.github.io/posts/how_lgtv/">
+  <meta property="og:site_name" content="Luca Molteni&#39;s Blog">
+  <meta property="og:title" content="How to root your LG TV (If you live in Italy)">
+  <meta property="og:description" content="This post should have been written at least three years ago, but here we are.
+At the end of 2021, while stuck at home with COVID and confined within my four walls, I was watching YouTube videos while my mom had the TV tuned to the italic Canale 5.">
+  <meta property="og:locale" content="en_us">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="posts">
+
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="How to root your LG TV (If you live in Italy)">
+  <meta name="twitter:description" content="This post should have been written at least three years ago, but here we are.
+At the end of 2021, while stuck at home with COVID and confined within my four walls, I was watching YouTube videos while my mom had the TV tuned to the italic Canale 5.">
+
+        <link href="https://molteniluca.github.io/css/fonts.2c2227b81b1970a03e760aa2e6121cd01f87c88586803cbb282aa224720a765f.css" rel="stylesheet">
+	
+
+	
+	<link rel="stylesheet" type="text/css" media="screen" href="https://molteniluca.github.io/css/main.6a0f23ea50fd34b46fee262a5a68e17d458c51a2bc99ba1ba018065de6b180c3.css" />
+</head>
+<body>
+        <div class="content"><header>
+	<div class="main">
+		<a href="https://molteniluca.github.io/">Luca Molteni&#39;s Blog</a>
+	</div>
+	<nav>
+		
+		<a href="/">Home</a>
+		
+		<a href="/posts">All posts</a>
+		
+		
+	</nav>
+</header>
+
+<main>
+  <article>
+    <div class="post-container">
+      
+      <div class="post-content">
+        <div class="title">
+          <h1 class="title">How to root your LG TV (If you live in Italy)</h1>
+          <div class="meta">Posted on Jan 1, 1</div>
+        </div>
+        
+        <section class="body">
+          <p>This post should have been written at least three years ago, but here we are.</p>
+<p>At the end of 2021, while stuck at home with COVID and confined within my four walls, I was watching YouTube videos while my mom had the TV tuned to the italic <code>Canale 5</code>.</p>
+<p>What caught my attention was that even though Italy was still broadcasting in low-quality SD (580p) in 2022, a banner on the screen appeared to be rendered at a much higher resolution. Even stranger: during the entire previous week of isolation, that banner never showed up.</p>
+<p>The only difference?
+This time, the TV was connected to my phone’s hotspot.</p>
+<h2 id="the-curiosity-spark">The Curiosity Spark</h2>
+<p>I started inspecting the Grande Fratello (Big Brother) banner.
+With a very janky setup, I:</p>
+<ul>
+<li>Fired up my phone’s USB hotspot.</li>
+<li>Connected my laptop to that.</li>
+<li>Created a Wi-Fi hotspot on the laptop and connected the TV to it.</li>
+<li>Started sniffing traffic with Wireshark.</li>
+</ul>
+<p>Once the TV tuned to the correct station, I saw that:</p>
+<ul>
+<li>DNS queries were made to Mediaset’s servers.</li>
+<li>Subsequent requests were plain old HTTP (yep, no HTTPS).</li>
+<li>Among the resources fetched? <code>.class</code> files. Yes <code>.class</code> files in plain HTTP.</li>
+</ul>
+<h2 id="the-tv">The TV</h2>
+<p>Some quick context on the victim device here: it is an LG TV 43UF6407 and it uses the WebOS 2.0 operating system.
+This TV does not support HbbTV but it supports MHP a protocol only known in Italy and a few other countries in its DVB-T form.</p>
+<h2 id="the-exploit">The Exploit</h2>
+<p>So I inspected and reversed some of those .class files, then patched one to execute arbitrary commands.</p>
+<p>Steps I took:</p>
+<ul>
+<li>Hosted one my patched .class file.</li>
+<li>Changed DNS records on my laptop.</li>
+<li>Fired up a local web server.</li>
+</ul>
+<p>When the TV booted and tuned to the channel, it fetched my resources and executed the command inside the .class file:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>curl http://mylaptop.lan/pwned
+</span></span></code></pre></div><p>I immediately saw the request on my laptop — confirming remote code execution.
+Next, I swapped the payload to start a telnet daemon:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>telnetd -l /bin/sh -F
+</span></span></code></pre></div><h2 id="the-surprise">The Surprise</h2>
+<p>Upon connecting to the telnet endpoint, I wanted to attempt privilege escalation.
+The surprise?</p>
+<p>I was <em>already root</em>.</p>
+<p>So this protocol already executes untrusted code in a JVM sandbox. The LG implementation even contains the exec API (which is not even required by the MHP standard).</p>
+<p>And they also executed everything <em>as root</em>.</p>
+<h2 id="bigger-picture-the-mhp-problem">Bigger Picture: The MHP Problem</h2>
+<p>Here’s the scarier part.</p>
+<p>The MHP standard (Multimedia Home Platform) — the thing that makes all this possible — is used by tons of TVs in Italy.</p>
+<p>The first .class file is actually sent nationwide through DVB-T broadcasts.</p>
+<p>This could mean that a malicious attacker with a rogue DVB-T transmitter could broadcast a malicious .class file to any nearby TVs?</p>
+<p>Actually the MHP protocol has some kind of signature checking to determine API priviledges but I could not verify how the TV would react under the more restricted circumstances, being that I do not own a DVB-T transmitter nor a faraday cage to not get in trouble.</p>
+<h2 id="aftermath">Aftermath</h2>
+<p>So all in all this was a cool vulnerability that could be further explored, in the meantime with root access, I installed the alternative app store on my TV using my own method.
+And that’s how the Grande Fratello banner led me to owning an LG TV.</p>
+<h2 id="responsible-disclosure">Responsible Disclosure</h2>
+<p>This vulnerability has been reported to LG which assessed the problem but did not fix it since it does affect only devices released until 2016.</p>
+
+        </section>
+        <div class="post-tags">
+          
+          
+          
+        </div>
+      </div>
+
+      
+      
+    </div>
+
+    </article>
+</main>
+<footer>
+  <div style="display:flex"><a class="soc" href="https://github.com/molteniluca/" rel="me" title="GitHub"><svg class="feather">
+   <use href="/svg/feather-sprite.51cf5647cb1987f769b616558f2620fd9423d72058490231b391bf6aa3744b55.svg#github" />
+</svg></a><a class="border"></a><a class="soc" href="https://twitter.com/Luca__molteni/" rel="me" title="Twitter"><svg class="feather">
+   <use href="/svg/feather-sprite.51cf5647cb1987f769b616558f2620fd9423d72058490231b391bf6aa3744b55.svg#twitter" />
+</svg></a><a class="border"></a><a class="soc" href="https://www.linkedin.com/in/lmolteni/" rel="me" title="LinkedIn"><svg class="feather">
+   <use href="/svg/feather-sprite.51cf5647cb1987f769b616558f2620fd9423d72058490231b391bf6aa3744b55.svg#linkedin" />
+</svg></a><a class="border"></a></div>
+  <div class="footer-info">
+    2025  © Luca Molteni |  <a
+      href="https://github.com/athul/archie">Archie Theme</a> | Built with <a href="https://gohugo.io">Hugo</a>
+  </div>
+</footer>
+
+
+
+</div>
+    </body>
+</html>
